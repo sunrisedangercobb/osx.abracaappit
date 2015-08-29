@@ -1,6 +1,8 @@
 # osx_apps-AbracaAppIT
 A basic shell script wrapped as osx app to allow you to create osx apps out of shell scripts.
 
-This was developed as an IT helper originally and became quite useful over time.  The premise was to write scripts for the one off use cases and give users an easy way of using them, hence turning a script into a button push.
+This concept came to me as an IT admin, I had several one off cases where users needed to do something that was to complex or that they didn't really have rights/auth to do.
 
-For user input osascript is used for a more native look.  This is also a good example of how to use osascript in CL to accomplish the execution of a script (and admin like actions) by an average user.
+I began to write little programs and then wrap them up as an osx app to allow easy execution.
+
+This project works as a helper and as an example of how to create an app and capture user input for the result.  For user interaction osascript is used. This gives your script a very native feel and the app format really discourages the average user to not dig any deeper.
