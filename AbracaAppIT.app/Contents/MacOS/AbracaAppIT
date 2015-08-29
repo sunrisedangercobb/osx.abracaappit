@@ -1,0 +1,160 @@
+#!/bin/bash
+
+##TODO: sunrise
+# Create a "create skeleton" operation that creates the basic shell for dev purposes.  This should also include baseline of any app, SCRIPTPATH,BASE_APP_PATH and basic osascript interactions.  Maybe the baseline functions too.
+# Script could use some overall cleanup and organization as well.
+
+# Change independent field seperator
+SAVEIFS=$IFS
+IFS=$'\n'
+
+## Get the path and other info.
+APP_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
+APP_NAME="$(basename "$0")"
+BASE_APP_PATH=`echo $APP_PATH | sed -e 's/Contents\/MacOS//g'`
+
+# Check for preferred notifier.
+check_gem=`gem list terminal-notifier -i`
+
+## Create functions for repetitious work
+# Notification functions
+function success {
+	if [[ $check_gem == "true" ]]; then
+	  echo "App Created: $OUTPUT_DIRECTORY/$TARGET_APPNAME.app" | terminal-notifier -sound default -appIcon "$BASE_APP_PATH/Contents/Resources/$APP_NAME.icns"
+	else
+	  osascript -e "display notification \"App Created: $OUTPUT_DIRECTORY/$TARGET_APPNAME.app\" with title \"$APP_NAME\""
+	fi
+}
+function failure {
+	if [[ $check_gem == "true" ]]; then
+	  echo "Failed, App exists: $OUTPUT_DIRECTORY/$TARGET_APPNAME.app" | terminal-notifier -sound default -appIcon "$BASE_APP_PATH/Contents/Resources/$APP_NAME.icns"
+	else
+	  osascript -e "display notification \"Failed, App exists: $OUTPUT_DIRECTORY/$TARGET_APPNAME.app\" with title \"$APP_NAME\""
+	fi
+}
+function error {
+	if [[ $check_gem == "true" ]]; then
+	  echo "Exiting: Error" | terminal-notifier -sound default -appIcon "$BASE_APP_PATH/Contents/Resources/$APP_NAME.icns"
+	else
+	  osascript -e "display notification \"Exiting: Error\" with title \"$APP_NAME\""
+	fi
+}
+
+# Misc work and Errors
+function cut_string () {
+  echo $@ | cut -d ":" -f 2
+}
+function check_bool () {
+  if [[ $? == 1 ]]; then
+    IFS=$SAVEIFS
+    error
+    exit 1
+  fi
+}
+
+# Required Field
+function get_appname {
+  while :; do # Loop until valid input is entered or Cancel is pressed.  
+    TARGET_APPNAME=`osascript -e 'Tell application "System Events" to display dialog "App Name:" default answer ""' -e 'text returned of result' 2>/dev/null`
+    if (( $? )); then exit 1; fi  # Abort, if user pressed Cancel.  
+    TARGET_APPNAME=$(echo -n "$TARGET_APPNAME" | sed 's/^ *//' | sed 's/ *$//')  # Trim leading and trailing whitespace.  
+    if [[ -z "$TARGET_APPNAME" ]]; then  
+      # The user left the project name blank.  
+      osascript -e 'Tell application "System Events" to display alert "You must enter a app name; please try again." as warning' >/dev/null  
+      # Continue loop to prompt again.  
+    else  
+      # Valid input: exit loop and continue.  
+      break  
+    fi  
+  done 
+}
+
+# Application Instructions
+WELCOME=`osascript -e 'tell app "System Events" to display dialog "Welcome to '$APP_NAME'.  Create Apps from your Bash Scripts! \n\n1.) Select a Script\n2.) Select an Icon (optional)\n3.) Select a Binary (optional)\n4.) Select a Name\n5.) Select an Output" buttons {"Cancel","About","Ok"} default button 3 with icon {"'$BASE_APP_PATH'/Contents/Resources/'$APP_NAME'.icns"} with title "'$APP_NAME'"'`
+check_bool $WELCOME
+CHECK_ABOUT=`cut_string $WELCOME`
+if [[ $CHECK_ABOUT == "About" ]]; then
+  osascript -e 'tell app "System Events" to display dialog "'$APP_NAME' was created for writing simple OSX apps. These can have user interaction or not, up to you!\n\n'$APP_NAME' Creation Structure:\nAPPNAME.app/\nAPPNAME.app/Contents/Info.plist\nAPPNAME.app/Contents/MacOS/\nAPPNAME.app/Contents/Resources/\n(optional)\nAPPNAME.app/Contents/Resources/bin/\n\n'$APP_NAME' Tips:\nUse osascript for user interaction.\nIf using binaries, write your scripts with the directory stucture in mind.\n" buttons {"Cancel"} default button 1 with icon {"'$BASE_APP_PATH'/Contents/Resources/'$APP_NAME'.icns"} with title "'$APP_NAME'"'
+  exit 1
+fi
+
+SCRIPT=`osascript -e 'tell application "System Events" to return POSIX path of (choose file)'`
+check_bool $SCRIPT
+
+# Optional
+ICON_CHECK=`osascript -e 'tell app "System Events" to display dialog "Would you like to choose an Icon?" buttons {"Cancel","Ok"} default button 2 with icon {"'$BASE_APP_PATH'/Contents/Resources/'$APP_NAME'.icns"} with title "'$APP_NAME'"'`
+if [[ $? == 1 ]]; then
+  ICON="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns"
+else
+  ICON=`osascript -e 'tell application "System Events" to return POSIX path of (choose file)'`	
+fi
+
+# Optional
+BINARY_CHECK=`osascript -e 'tell app "System Events" to display dialog "Would you like to choose an Binary?" buttons {"Cancel","Ok"} default button 2 with icon {"'$BASE_APP_PATH'/Contents/Resources/'$APP_NAME'.icns"} with title "'$APP_NAME'"'`
+if [[ $? == 1 ]]; then
+  BINARY=1
+else
+  BINARY=`osascript -e 'tell application "System Events" to return POSIX path of (choose file)'`	
+fi
+
+get_appname
+
+INPUT_DIR=`dirname "$SCRIPT"`
+
+# Prompt for folder output
+OUTPUT_SELECTOR=`osascript -e 'tell app "System Events" to display dialog "Select Output Directory." buttons {"Cancel","Select","Default"} default button 3 with icon {"'$BASE_APP_PATH'/Contents/Resources/'$APP_NAME'.icns"} with title "'$APP_NAME'"'`
+OUTPUT_SELECTION=`cut_string $OUTPUT_SELECTOR`
+
+# Do a check for output selection default/other
+if [[ $OUTPUT_SELECTION == "Default" ]]; then 
+  OUTPUT_DIRECTORY=$INPUT_DIR 
+else
+  OUTPUT_DIRECTORY=`osascript -e 'tell application "System Events" to return POSIX path of (choose folder)'`
+  check_bool $OUTPUT_DIRECTORY
+fi
+
+DIR="$OUTPUT_DIRECTORY/$TARGET_APPNAME.app/Contents"
+
+if [ -a "$OUTPUT_DIRECTORY/$TARGET_APPNAME.app" ]; then
+	failure
+	exit 1
+fi
+
+if [[ $BINARY == 1 ]]; then
+  mkdir -p $DIR/{MacOS,Resources}
+else
+	mkdir -p $DIR/{MacOS,Resources}
+	mkdir -p $DIR/Resources/bin
+	BINARY_NAME=`basename $BINARY`
+  cp "$BINARY" "$DIR/Resources/bin/$BINARY_NAME"
+  chmod +x "$DIR/Resources/bin/$BINARY_NAME"
+fi
+
+cp "$ICON" "$DIR/Resources/$TARGET_APPNAME.icns"
+ 
+cp "$SCRIPT" "$DIR/MacOS/$TARGET_APPNAME"
+chmod +x "$DIR/MacOS/$TARGET_APPNAME"
+ 
+cat <<EOF > $DIR/Info.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>$TARGET_APPNAME</string>
+	<key>CFBundleGetInfoString</key>
+	<string>$TARGET_APPNAME</string>
+	<key>CFBundleIconFile</key>
+	<string>$TARGET_APPNAME</string>
+	<key>CFBundleName</key>
+	<string>$TARGET_APPNAME</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+</dict>
+</plist>
+EOF
+
+success
+
+# Set independent field seperator back
+IFS=$SAVEIFS
