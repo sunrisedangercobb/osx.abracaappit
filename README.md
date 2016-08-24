@@ -1,4 +1,4 @@
-# osx_apps-AbracaAppIT
+#AbracaAppIT
 A basic shell script wrapped as osx app to allow you to create osx apps out of shell scripts.
 
 This concept came to me as an IT admin, I had several one off cases where users needed to do something that was to complex or that they didn't really have rights/auth to do.
